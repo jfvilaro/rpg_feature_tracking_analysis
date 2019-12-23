@@ -4,8 +4,14 @@ import cv2
 from os.path import join
 import numpy as np
 import tqdm
+import random
+
 
 from big_pun.tracker_utils import filter_first_tracks, getTrackData
+
+
+def component():
+    return random.randint(0, 255)
 
 
 class FeatureTracksVisualizer:
@@ -13,8 +19,7 @@ class FeatureTracksVisualizer:
         self.params = params
 
         self.dataset = dataset
-        self.tracks, self.feature_ids, self.colors = self.loadFeatureTracks(file)
-
+        self.tracks, self.feature_ids, self.colors, self.colors_id = self.loadFeatureTracks(file)
         self.min_time_between_screen_refresh_ms = 5
         self.max_time_between_screen_refresh_ms = 100
 
@@ -69,6 +74,7 @@ class FeatureTracksVisualizer:
     def loadFeatureTracks(self, file, method="estimation", color=[0, 255, 0], gt_color=[255, 0, 255]):
         tracks = {}
         colors = {}
+        colors_id = {}
 
         tracks_dir = os.path.dirname(file)
         color = [r for r in reversed(color)]
@@ -81,6 +87,9 @@ class FeatureTracksVisualizer:
         valid_ids, data = filter_first_tracks(data, filter_too_short=True)
         track_data = {i: data[data[:, 0] == i, 1:] for i in valid_ids}
         tracks[method] = track_data
+
+        for i in valid_ids:
+            colors_id[i] = [component(), component(), component()]
 
         if len(track_data) < first_len_tracks:
             print("WARNING: This package only supports evaluation of tracks which have been initialized at the same"
@@ -114,7 +123,7 @@ class FeatureTracksVisualizer:
         self.min_stamp = min_stamp
         self.max_stamp = max_stamp
 
-        return tracks, feature_ids, colors
+        return tracks, feature_ids, colors, colors_id
 
     def pause(self):
         self.is_paused = True
@@ -234,7 +243,7 @@ class FeatureTracksVisualizer:
             cv2.line(img, (x-c, y), (x+c, y), color, thickness=t)
             cv2.line(img, (x, y-c), (x, y+c), color, thickness=t)
         elif self.marker == "circle":
-            cv2.circle(img, center=(x, y), radius=c, color=color,  thickness=t)
+            cv2.circle(img, center=(x, y), radius=c, color=color, thickness=t)
 
     def drawLegend(self, image, legend, size):
         s = self.params["scale"]
@@ -271,10 +280,10 @@ class FeatureTracksVisualizer:
 
                         _, x, y = (s*point).astype(int)
                         trail_marker = "cross" if label == "gt" else "dot"
-                        self.drawTrail(image, x, y, self.colors[label], marker=trail_marker)
+                        self.drawTrail(image, x, y, self.colors_id[feature_id], marker=trail_marker)
 
                     _, x, y = (s*track_segment[-1]).astype(int)
-                    self.drawMarker(image, x, y, self.colors[label])
+                    self.drawMarker(image, x, y, self.colors_id[feature_id])
 
         return image
 
