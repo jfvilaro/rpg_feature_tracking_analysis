@@ -15,11 +15,11 @@ def component():
 
 
 class FeatureTracksVisualizer:
-    def __init__(self, file, dataset, params):
+    def __init__(self, gt_file,track_file, dataset, params):
         self.params = params
 
         self.dataset = dataset
-        self.tracks, self.feature_ids, self.colors, self.colors_id = self.loadFeatureTracks(file)
+        self.tracks, self.feature_ids, self.colors, self.colors_id = self.loadFeatureTracks(gt_file,track_file)
         self.min_time_between_screen_refresh_ms = 5
         self.max_time_between_screen_refresh_ms = 100
 
@@ -71,44 +71,66 @@ class FeatureTracksVisualizer:
 
         return predictions, gt
 
-    def loadFeatureTracks(self, file, method="estimation", color=[0, 255, 0], gt_color=[255, 0, 255]):
+    def loadFeatureTracks(self, gt_file, track_file, method="estimation", color=[0, 255, 0], gt_color=[255, 0, 255]):
         tracks = {}
         colors = {}
         colors_id = {}
 
-        tracks_dir = os.path.dirname(file)
         color = [r for r in reversed(color)]
-        colors[method] = color
 
-        # load tracks
-        data = np.genfromtxt(file, delimiter=" ")
-        first_len_tracks = len(data)
+        if self.params['visualisation_mode'] == "estimation":
 
-        valid_ids, data = filter_first_tracks(data, filter_too_short=True)
-        track_data = {i: data[data[:, 0] == i, 1:] for i in valid_ids}
-        tracks[method] = track_data
+            # load track
+            colors["estimation"] = color
+            data = np.genfromtxt(track_file, delimiter=" ")
+            first_len_tracks = len(data)
 
-        for i in valid_ids:
-            colors_id[i] = [component(), component(), component()]
+            valid_ids, data = filter_first_tracks(data, filter_too_short=True)
+            track_data = {i: data[data[:, 0] == i, 1:] for i in valid_ids}
+            tracks[method] = track_data
 
-        if len(track_data) < first_len_tracks:
-            print("WARNING: This package only supports evaluation of tracks which have been initialized at the same"
-                  "time. All tracks except the first have been discarded.")
+            for i in valid_ids:  # Define a different random color for each id.
+                colors_id[i] = [component(), component(), component()]
 
-        # load gt
-        tracks_csv = join(tracks_dir, "tracks.txt.gt.txt")
-        if isfile(tracks_csv):
-            gt = getTrackData(tracks_csv)
+            if len(track_data) < first_len_tracks:
+                print("WARNING: This package only supports evaluation of tracks which have been initialized at the same"
+                      "time. All tracks except the first have been discarded.")
+
+            # load gt
+            tracks_csv = join(gt_file)
+            if isfile(tracks_csv):
+                gt = getTrackData(tracks_csv)
+                colors["gt"] = gt_color
+
+                # if true, crop all tracks from gt to have the same length as the predictions.
+                if self.params["crop_to_predictions"]:
+                    gt = self.cropGT(gt, tracks[method])
+
+                if self.params["error_threshold"] > 0:
+                    tracks[method], gt = self.discardOnThreshold(tracks[method], gt, self.params["error_threshold"])
+
+                tracks["gt"] = gt
+
+        elif self.params['visualisation_mode'] == "gt":
+
+            # load gt
+            data = np.genfromtxt(gt_file, delimiter=" ")
+            first_len_tracks = len(data)
+
+            valid_ids, data = filter_first_tracks(data, filter_too_short=True)
+            track_data = {i: data[data[:, 0] == i, 1:] for i in valid_ids}
+            tracks["gt"] = track_data
+
+            for i in valid_ids:  # Define a different random color for each id.
+                colors_id[i] = [component(), component(), component()]
+
+            if len(track_data) < first_len_tracks:
+                print("WARNING: This package only supports evaluation of tracks which have been initialized at the same"
+                      "time. All tracks except the first have been discarded.")
+
             colors["gt"] = gt_color
 
-            # if true, crop all tracks from gt to have the same length as the predictions.
-            if self.params["crop_to_predictions"]:
-                gt = self.cropGT(gt, tracks[method])
 
-            if self.params["error_threshold"] > 0:
-                tracks[method], gt = self.discardOnThreshold(tracks[method], gt, self.params["error_threshold"])
-
-            tracks["gt"] = gt
 
         feature_ids = {label: list(tracks_dict.keys()) for label, tracks_dict in tracks.items()}
 
@@ -253,7 +275,7 @@ class FeatureTracksVisualizer:
         n = int(70 *s)
 
         for label, color in legend.items():
-            if label == "gt":
+            if self.params['visualisation_mode'] == "gt" or label == "gt":
                 label = "ground truth"
             cv2.putText(image, label, (off_x-n, t), cv2.FONT_HERSHEY_COMPLEX, int(s/4), color)
             t += int(10 *s)
@@ -280,10 +302,17 @@ class FeatureTracksVisualizer:
 
                         _, x, y = (s*point).astype(int)
                         trail_marker = "cross" if label == "gt" else "dot"
-                        self.drawTrail(image, x, y, self.colors_id[feature_id], marker=trail_marker)
+                        if self.params["visualisation_mode"] == "gt":
+                            self.drawTrail(image, x, y, self.colors_id[feature_id], marker=trail_marker)
+                        else:
+                            self.drawTrail(image, x, y, self.colors[label], marker=trail_marker)
 
                     _, x, y = (s*track_segment[-1]).astype(int)
-                    self.drawMarker(image, x, y, self.colors_id[feature_id])
+
+                    if self.params["visualisation_mode"] == "gt":
+                        self.drawMarker(image, x, y, self.colors_id[feature_id])
+                    else:
+                        self.drawMarker(image, x, y, self.colors[label])
 
         return image
 
