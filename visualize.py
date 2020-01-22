@@ -37,7 +37,7 @@ assert args.scale > 0, "--scale must be positive."
 assert args.framerate > 0, "--framerate must be positive."
 assert args.speed > 0, "seed must be positive."
 assert args.marker in ["circle", "cross"], "--marker must be circle or cross."
-assert args.visualisation_mode in ["gt","estimation"], "--visualisation_mode must be gt or estimation"
+assert args.visualisation_mode in ["gt","track","estimation"], "--visualisation_mode must be gt or estimation"
 
 params = {}
 params['track_history_length'] = args.track_history_length

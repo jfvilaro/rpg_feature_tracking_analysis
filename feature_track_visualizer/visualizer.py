@@ -130,7 +130,24 @@ class FeatureTracksVisualizer:
 
             colors["gt"] = gt_color
 
+        elif self.params['visualisation_mode'] == "track":
 
+            # load track
+            data = np.genfromtxt(track_file, delimiter=" ")
+            first_len_tracks = len(data)
+
+            valid_ids, data = filter_first_tracks(data, filter_too_short=True)
+            track_data = {i: data[data[:, 0] == i, 1:] for i in valid_ids}
+            tracks["track"] = track_data
+
+            for i in valid_ids:  # Define a different random color for each id.
+                colors_id[i] = [component(), component(), component()]
+
+            if len(track_data) < first_len_tracks:
+                print("WARNING: This package only supports evaluation of tracks which have been initialized at the same"
+                      "time. All tracks except the first have been discarded.")
+
+            colors["track"] = gt_color
 
         feature_ids = {label: list(tracks_dict.keys()) for label, tracks_dict in tracks.items()}
 
@@ -277,6 +294,8 @@ class FeatureTracksVisualizer:
         for label, color in legend.items():
             if self.params['visualisation_mode'] == "gt" or label == "gt":
                 label = "ground truth"
+            if self.params['visualisation_mode'] == "track" or label == "track":
+                label = "track"
             cv2.putText(image, label, (off_x-n, t), cv2.FONT_HERSHEY_COMPLEX, int(s/4), color)
             t += int(10 *s)
 
@@ -301,15 +320,16 @@ class FeatureTracksVisualizer:
                     for point in track_segment[:-1]:
 
                         _, x, y = (s*point).astype(int)
-                        trail_marker = "cross" if label == "gt" else "dot"
-                        if self.params["visualisation_mode"] == "gt":
+                        #trail_marker = "cross" if label == "gt" else "dot"
+                        trail_marker = "dot"
+                        if self.params["visualisation_mode"] == "gt" or self.params["visualisation_mode"] == "track":
                             self.drawTrail(image, x, y, self.colors_id[feature_id], marker=trail_marker)
                         else:
                             self.drawTrail(image, x, y, self.colors[label], marker=trail_marker)
 
                     _, x, y = (s*track_segment[-1]).astype(int)
 
-                    if self.params["visualisation_mode"] == "gt":
+                    if self.params["visualisation_mode"] == "gt" or self.params["visualisation_mode"] == "track":
                         self.drawMarker(image, x, y, self.colors_id[feature_id])
                     else:
                         self.drawMarker(image, x, y, self.colors[label])
